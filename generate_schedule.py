@@ -1,287 +1,142 @@
-import csv
-import glob
-from pathlib import Path
-
-import pandas as pd
 import xlsxwriter
-from pandas_ods_reader import read_ods
 
-week_days_dict = {
-    "MON": 0,
-    "TUE": 1,
-    "WED": 2,
-    "THU": 3,
-    "FRI": 4,
-    "SAT": 5,
-    "SUN": 6,
-}
+from models import Course
+from settings import (
+    BREAK_PROPERTIES,
+    COLOR_CELL_PROPERTIES,
+    COLOR_PALETTE,
+    DEFAULT_CELL_PROPERTIES,
+    HEADER_PROPERTIES,
+    PERIODS_PER_DAY,
+    RESULT_XLSX,
+    WEEK_DAYS_DICT,
+)
+from utils import read_ods_catalog
 
 
-def read_ods_catalog():
-    catalog_df = read_ods("catalog.ods", 0)
+class Generator:
+    WEEK_DAYS = 7
 
-    for idx, row in catalog_df.iterrows():
-        if row["Select"] is None:
-            continue
+    def __init__(self):
+        self.courses_dict = {}
 
-        try:
-            course = courses_dict[row["Course Code"]]
-        except KeyError:
-            course = Course(
-                code=row["Course Code"],
-                name=row["Course Name"].lstrip("\xa0"),
-                no_credits=row["Credits"],
-            )
-            courses_dict[row["Course Code"]] = course
+        self.default_cell_format = None
+        self.color_cell_formats_list = None
+        self.header_format = None
+        self.break_format = None
+        self.worksheet = None
+        self.rows_written = 0
 
-        if row["Has Lab"] is not None:
-            name_list = row["Classroom"].split("\xa0")
-            week_date_list = row["Week Date"].split("\xa0")
-            start_period_list = row["Start Period"].split("\xa0")
-            no_periods_list = row["No. Periods"].split("\xa0")
-            professor_list = row["Professor"].split("\xa0")
-            duration_list = row["Duration"].split("\xa0")
-            pair_classrooms = []
-            for i in range(2):
-                pair_classrooms.append(
-                    Classroom(
-                        name=name_list[i],
-                        week_date=parse_week_date(week_date_list[i]),
-                        start_period=int(start_period_list[i]),
-                        no_periods=int(no_periods_list[i]),
-                        professor=professor_list[i],
-                        duration=duration_list[i],
-                        course_group=row["Course Group"],
-                        lab_group=row["Lab Group"],
-                        no_students=row["No. Students"],
-                        no_slots=row["No. Slots"],
-                    )
-                )
-            course.add_pair_classrooms(pair_classrooms)
+        self.week_list = [
+            [None for _ in range(self.WEEK_DAYS)] for _ in range(PERIODS_PER_DAY)
+        ]
+        self.cells_format_list = [
+            [DEFAULT_CELL_PROPERTIES for _ in range(self.WEEK_DAYS)]
+            for _ in range(PERIODS_PER_DAY)
+        ]
+
+        self.courses_tuple = ()
+
+    def run(self):
+        read_ods_catalog(self.courses_dict)
+        self.courses_tuple = tuple(self.courses_dict.values())
+
+        with xlsxwriter.Workbook(RESULT_XLSX) as workbook:
+            self.worksheet = workbook.add_worksheet()
+            self.worksheet.set_column(1, 7, 20)
+            self.rows_written = 0
+
+            def get_format_color(i):
+                color_cell_format = workbook.add_format(COLOR_CELL_PROPERTIES)
+                color_cell_format.set_bg_color(COLOR_PALETTE[i])
+                return color_cell_format
+
+            self.default_cell_format = workbook.add_format(DEFAULT_CELL_PROPERTIES)
+            self.color_cell_formats_list = [
+                get_format_color(i) for i in range(len(self.courses_tuple))
+            ]
+            self.header_format = workbook.add_format(HEADER_PROPERTIES)
+            self.break_format = workbook.add_format(BREAK_PROPERTIES)
+
+            self.cells_format_list = [
+                [self.default_cell_format for _ in range(self.WEEK_DAYS)]
+                for _ in range(PERIODS_PER_DAY)
+            ]
+
+            self.generate_schedule(0)
+
+    def generate_schedule(self, course_idx):
+        if course_idx >= len(self.courses_tuple):
+            self.xlsx_write_schedule()
+            return
         else:
-            classroom = Classroom(
-                name=row["Classroom"],
-                week_date=parse_week_date(row["Week Date"]),
-                start_period=int(row["Start Period"]),
-                no_periods=int(row["No. Periods"]),
-                professor=row["Professor"],
-                duration=row["Duration"],
-                course_group=row["Course Group"],
-                lab_group=row["Lab Group"],
-                no_students=row["No. Students"],
-                no_slots=row["No. Slots"],
-            )
-            course.add_classroom(classroom)
+            course: Course = self.courses_tuple[course_idx]
+            for group_tuple in course.groups_list:
+                if not self.is_free(group_tuple):
+                    continue
+                self.set_periods(course_idx, group_tuple)
+                self.generate_schedule(course_idx + 1)
+                self.free_periods(group_tuple)
 
+            return
 
-def parse_week_date(week_date_str: str) -> int:
-    global week_days_dict
-    week_date_str = week_date_str.rstrip(" ")
-    if week_date_str == "Hai":
-        week_date_int = week_days_dict["MON"]
-    elif week_date_str == "Ba":
-        week_date_int = week_days_dict["TUE"]
-    elif week_date_str == "Tư":
-        week_date_int = week_days_dict["WED"]
-    elif week_date_str == "Năm":
-        week_date_int = week_days_dict["THU"]
-    elif week_date_str == "Sáu":
-        week_date_int = week_days_dict["FRI"]
-    elif week_date_str == "Bảy":
-        week_date_int = week_days_dict["SAT"]
-    elif week_date_str == "Chủ Nhật":
-        week_date_int = week_days_dict["SUN"]
-    else:
-        week_date_int = -1
-    return week_date_int
+    def is_free(self, group_tuple) -> bool:
+        for classroom in group_tuple:
+            for i in range(classroom.no_periods):
+                if (
+                    self.week_list[classroom.start_period + i - 1][classroom.week_date]
+                    is not None
+                ):
+                    return False
+        return True
 
+    def set_periods(self, course_idx, group_tuple):
+        for classroom in group_tuple:
+            self.week_list[classroom.start_period - 1][
+                classroom.week_date
+            ] = self.courses_tuple[course_idx].name
+            for i in range(classroom.no_periods - 1):
+                self.cells_format_list[classroom.start_period + i - 1][
+                    classroom.week_date
+                ] = self.color_cell_formats_list[course_idx]
 
-class Classroom:
-    def __init__(
-        self,
-        name,
-        week_date,
-        start_period,
-        no_periods,
-        professor,
-        duration,
-        course_group,
-        lab_group,
-        no_students,
-        no_slots,
-    ):
-        self.name = name
-        self.week_date = week_date
-        self.start_period = start_period
-        self.no_periods = no_periods
-        self.professor = professor
-        self.duration = duration
-        self.course_group = course_group
-        self.lab_group = lab_group
-        self.no_students = no_students
-        self.no_slots = no_slots
-        self.schedule = (self.week_date, self.start_period, self.no_periods)
-        self.course = None
+            self.week_list[classroom.start_period + classroom.no_periods - 2][
+                classroom.week_date
+            ] = "{} - {}".format(classroom.professor, classroom.name)
+            self.cells_format_list[classroom.start_period + classroom.no_periods - 2][
+                classroom.week_date
+            ] = self.color_cell_formats_list[course_idx]
 
-    def __repr__(self):
-        return f"{self.schedule}"
+    def free_periods(self, group_tuple):
+        for classroom in group_tuple:
+            for i in range(classroom.no_periods):
+                self.week_list[classroom.start_period + i - 1][
+                    classroom.week_date
+                ] = None
+                self.cells_format_list[classroom.start_period + i - 1][
+                    classroom.week_date
+                ] = self.default_cell_format
 
-
-class Course:
-    def __init__(self, code, name, no_credits):
-        self.code = code
-        self.name = name
-        self.no_credits = no_credits
-        self.groups_list = []
-
-    def add_classroom(self, classroom: Classroom):
-        classroom.course = self
-        self.groups_list.append((classroom,))
-
-    def add_pair_classrooms(self, pair_classrooms: list):
-        pair_classrooms[0].course = self
-        pair_classrooms[1].course = self
-
-        self.groups_list.append(tuple(pair_classrooms))
-
-    def __repr__(self):
-        return f"{self.groups_list}"
-
-
-def generate_schedule(course_idx, courses_tuple: tuple):
-    if course_idx >= len(courses_tuple):
-        print_schedule()
-        return
-    else:
-        course: Course = courses_tuple[course_idx]
-        for group_tuple in course.groups_list:
-            if not is_free(group_tuple):
-                continue
-            set_periods(course_idx, group_tuple)
-            generate_schedule(course_idx + 1, courses_tuple)
-            free_periods(group_tuple)
-
-        return
-
-
-def is_free(group_tuple) -> bool:
-    global week_list
-    for classroom in group_tuple:
-        for i in range(classroom.no_periods):
-            if (
-                week_list[classroom.start_period + i - 1][classroom.week_date]
-                is not None
-            ):
-                return False
-    return True
-
-
-def set_periods(course_idx, group_tuple):
-    global week_list, cells_format_list, workbook
-    for classroom in group_tuple:
-        cell_format = workbook.add_format(
-            {"bg_color": color_palette[course_idx], "border": 1, "text_wrap": 1}
+    def xlsx_write_schedule(self):
+        self.worksheet.set_row(self.rows_written, 30)
+        self.worksheet.write_row(
+            self.rows_written, 1, list(WEEK_DAYS_DICT.keys()), self.header_format
         )
-        week_list[classroom.start_period - 1][classroom.week_date] = courses_list[
-            course_idx
-        ].name
-        for i in range(classroom.no_periods - 1):
-            cells_format_list[classroom.start_period + i - 1][
-                classroom.week_date
-            ] = cell_format
+        self.rows_written += 1
 
-        week_list[classroom.start_period + classroom.no_periods - 2][
-            classroom.week_date
-        ] = "{} - {}".format(classroom.professor, classroom.name)
-        cells_format_list[classroom.start_period + classroom.no_periods - 2][
-            classroom.week_date
-        ] = cell_format
-
-
-def free_periods(group_tuple):
-    global week_list, cells_format_list, default_cell_format
-    for classroom in group_tuple:
-        for i in range(classroom.no_periods):
-            week_list[classroom.start_period + i - 1][classroom.week_date] = None
-            cells_format_list[classroom.start_period + i - 1][
-                classroom.week_date
-            ] = default_cell_format
-
-
-def print_schedule():
-    global week_list, cells_format_list, worksheet, rows_written, default_cell_format
-    week_list_dataframe = pd.DataFrame(week_list, columns=list(week_days_dict.keys()))
-    # with open(RESULT_CSV, "a") as f:
-    #     f.write(week_list_dataframe.to_csv(index=True))
-    #     f.write("###," + "#################################," * 7 + "\n")
-
-    header_format = workbook.add_format({"border": 1, "bold": 1, "center_across": 1})
-    worksheet.set_row(rows_written, 30)
-    worksheet.write_row(rows_written, 1, list(week_days_dict.keys()), header_format)
-    rows_written += 1
-
-    for period in range(len(week_list)):
-        worksheet.write(rows_written, 0, period + 1, default_cell_format)
-        for week_date in range(len(week_list[period])):
-            worksheet.write(
-                rows_written,
-                week_date + 1,
-                week_list[period][week_date],
-                cells_format_list[period][week_date],
+        for period in range(len(self.week_list)):
+            self.worksheet.write(
+                self.rows_written, 0, period + 1, self.default_cell_format
             )
-            worksheet.set_row(rows_written, 30)
-        rows_written += 1
+            for week_date in range(len(self.week_list[period])):
+                self.worksheet.write(
+                    self.rows_written,
+                    week_date + 1,
+                    self.week_list[period][week_date],
+                    self.cells_format_list[period][week_date],
+                )
+                self.worksheet.set_row(self.rows_written, 30)
+            self.rows_written += 1
 
-    break_format = workbook.add_format({"bg_color": "#808080"})
-    worksheet.set_row(rows_written, 50, break_format)
-    rows_written += 1
-
-
-courses_dict = {
-    # 'AA': (((MON, 1, 3), (TUE, 7, 4)), ((WED, 1, 3), (FRI, 7, 4))),
-    # 'BB': (((TUE, 7, 3), (FRI, 1, 4)), ((MON, 1, 3), (FRI, 7, 4))),
-    # 'CC': (((MON, 5, 2),), ((MON, 5, 2),)),
-}
-
-color_palette = [
-    "96BAFF",
-    "88FFF7",
-    "D59BF6",
-    "9DF3C4",
-    "F5E79D",
-    "FE9898",
-    "DBE2EF",
-    "FF9A3C",
-]
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent
-RESULT_CSV = BASE_DIR / "schedules.csv"
-
-# Courses list can have many Courses
-# Course can have many groups
-# Group can have 1 or 2 Classroom
-
-if __name__ == "__main__":
-    read_ods_catalog()
-
-    with open(RESULT_CSV, "w") as f:
-        f.write("")
-
-    workbook = xlsxwriter.Workbook(str(RESULT_CSV)[:-4] + ".xlsx")
-    worksheet = workbook.add_worksheet()
-    worksheet.set_column(1, 7, 20)
-    rows_written = 0
-
-    default_cell_format = workbook.add_format({"border": 1})
-    periods_per_day = 12
-    week_days = 7
-    week_list = [[None for _ in range(week_days)] for _ in range(periods_per_day)]
-    cells_format_list = [
-        [default_cell_format for _ in range(week_days)] for _ in range(periods_per_day)
-    ]
-
-    courses_list = tuple(courses_dict.values())
-    generate_schedule(0, courses_list)
-
-    workbook.close()
+        self.worksheet.set_row(self.rows_written, 50, self.break_format)
+        self.rows_written += 1
