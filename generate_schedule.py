@@ -68,7 +68,6 @@ class Generator:
     def generate_schedule(self, course_idx):
         if course_idx >= len(self.courses_tuple):
             self.xlsx_write_schedule()
-            return
         else:
             course: Course = self.courses_tuple[course_idx]
             for group_tuple in course.groups_list:
@@ -77,8 +76,6 @@ class Generator:
                 self.set_periods(course_idx, group_tuple)
                 self.generate_schedule(course_idx + 1)
                 self.free_periods(group_tuple)
-
-            return
 
     def is_free(self, group_tuple) -> bool:
         for classroom in group_tuple:
@@ -124,16 +121,16 @@ class Generator:
         )
         self.rows_written += 1
 
-        for period in range(len(self.week_list)):
+        for period in enumerate(self.week_list):
             self.worksheet.write(
-                self.rows_written, 0, period + 1, self.default_cell_format
+                self.rows_written, 0, period[0] + 1, self.default_cell_format
             )
-            for week_date in range(len(self.week_list[period])):
+            for week_date in enumerate(self.week_list[period[0]]):
                 self.worksheet.write(
                     self.rows_written,
-                    week_date + 1,
-                    self.week_list[period][week_date],
-                    self.cells_format_list[period][week_date],
+                    week_date[0] + 1,
+                    self.week_list[period[0]][week_date[0]],
+                    self.cells_format_list[period[0]][week_date[0]],
                 )
                 self.worksheet.set_row(self.rows_written, 30)
             self.rows_written += 1

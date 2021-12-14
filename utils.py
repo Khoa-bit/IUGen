@@ -7,7 +7,7 @@ from settings import INPUT_ODS, WEEK_DAYS_DICT
 def read_ods_catalog(courses_dict):
     catalog_df = read_ods(INPUT_ODS, 0)
 
-    for idx, row in catalog_df.iterrows():
+    for _, row in catalog_df.iterrows():
         if row["Select"] is None:
             continue
 
