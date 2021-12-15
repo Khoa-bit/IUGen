@@ -23,7 +23,7 @@ COLOR_PALETTE = [
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent
-INPUT_ODS = BASE_DIR / "inputs/catalog.ods"
+INPUT_TABULAR = BASE_DIR / "inputs/catalog.ods"
 RESULT_XLSX = BASE_DIR / "results/schedules.xlsx"
 
 DEFAULT_CELL_PROPERTIES = {"border": 1, "text_wrap": 1}

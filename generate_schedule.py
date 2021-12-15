@@ -2,7 +2,7 @@ import xlsxwriter
 
 from models import Course
 from settings import (
-    INPUT_ODS,
+    INPUT_TABULAR,
     BREAK_PROPERTIES,
     COLOR_CELL_PROPERTIES,
     COLOR_PALETTE,
@@ -18,8 +18,8 @@ from utils import read_ods_catalog
 class Generator:
     WEEK_DAYS = 7
 
-    def __init__(self, ods_file=INPUT_ODS):
-        self.courses_dict = read_ods_catalog(ods_file)
+    def __init__(self, tabular_file=INPUT_TABULAR):
+        self.courses_dict = read_ods_catalog(tabular_file)
         self.default_cell_format = None
         self.color_cell_formats_list = None
         self.header_format = None
@@ -41,6 +41,7 @@ class Generator:
         self.courses_tuple = tuple(self.courses_dict.values())
 
         with xlsxwriter.Workbook(RESULT_XLSX) as workbook:
+            print("Setting up workbook...")
             self.worksheet = workbook.add_worksheet()
             self.worksheet.set_column(1, 7, 20)
             self.rows_written = 0
@@ -62,18 +63,21 @@ class Generator:
                 for _ in range(PERIODS_PER_DAY)
             ]
 
-            self.generate_schedule(0)
+            print("Generating schedules to {}...".format(RESULT_XLSX))
+            self.generate_schedule_recursive(0)
+            print("Done generating schedules to {}...".format(RESULT_XLSX))
 
-    def generate_schedule(self, course_idx):
+    def generate_schedule_recursive(self, course_idx):
         if course_idx >= len(self.courses_tuple):
             self.xlsx_write_schedule()
+            print("\t-> Successfully generated a schedule")
         else:
             course: Course = self.courses_tuple[course_idx]
             for group_tuple in course.groups_list:
                 if not self.is_free(group_tuple):
                     continue
                 self.set_periods(course_idx, group_tuple)
-                self.generate_schedule(course_idx + 1)
+                self.generate_schedule_recursive(course_idx + 1)
                 self.free_periods(group_tuple)
 
     def is_free(self, group_tuple) -> bool:

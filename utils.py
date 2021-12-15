@@ -1,17 +1,19 @@
-from pandas_ods_reader import read_ods
+from pandas import read_excel
 
 from models import Classroom, Course
 from settings import WEEK_DAYS_DICT
 
 
-def read_ods_catalog(ods_file):
-    catalog_df = read_ods(ods_file, 0)
+def read_ods_catalog(tabular_file):
+    print("Reading {}...".format(tabular_file))
+    catalog_df = read_excel(tabular_file, 0)
     courses_dict = {}
 
+    print("\t== Reading row Selected with '*' ==")
     for idx, row in catalog_df.iterrows():
-        validate_row(idx, row, ods_file)
+        validate_row(idx, row, tabular_file)
 
-        if row["Select"] is None:
+        if row["Select"] != '*':
             continue
 
         course = get_or_create_course(courses_dict, row)
@@ -23,6 +25,9 @@ def read_ods_catalog(ods_file):
             classroom = create_classroom(row)
             course.add_classroom(classroom)
 
+        print("\t--> Read * row {}".format(idx))
+
+    print("Done reading {}".format(tabular_file))
     return courses_dict
 
 
