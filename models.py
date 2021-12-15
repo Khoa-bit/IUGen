@@ -34,17 +34,17 @@ class Course:
         self.code = code
         self.name = name
         self.no_credits = no_credits
-        self.groups_list = []
+        self.all_classrooms = []
 
     def add_classroom(self, classroom: Classroom):
         classroom.course = self
-        self.groups_list.append((classroom,))
+        self.all_classrooms.append((classroom,))
 
     def add_pair_classrooms(self, pair_classrooms: list):
         pair_classrooms[0].course = self
         pair_classrooms[1].course = self
 
-        self.groups_list.append(tuple(pair_classrooms))
+        self.all_classrooms.append(tuple(pair_classrooms))
 
     def __repr__(self):
-        return f"{self.groups_list}"
+        return f"{self.all_classrooms}"

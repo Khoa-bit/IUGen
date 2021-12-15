@@ -25,7 +25,7 @@ def read_ods_catalog(tabular_file):
             classroom = create_classroom(row)
             course.add_classroom(classroom)
 
-        print("\t--> Read * row {}".format(idx))
+        print("\t--> Read * row {}".format(idx + 2))
 
     print("Done reading {}".format(tabular_file))
     return courses_dict

@@ -25,9 +25,9 @@ class Generator:
         self.header_format = None
         self.break_format = None
         self.worksheet = None
-        self.rows_written = 0
+        self.rows_pointer = 0
 
-        self.week_list = [
+        self.schedule_table = [
             [None for _ in range(self.WEEK_DAYS)] for _ in range(PERIODS_PER_DAY)
         ]
         self.cells_format_list = [
@@ -44,7 +44,7 @@ class Generator:
             print("Setting up workbook...")
             self.worksheet = workbook.add_worksheet()
             self.worksheet.set_column(1, 7, 20)
-            self.rows_written = 0
+            self.rows_pointer = 0
 
             def get_format_color(i):
                 color_cell_format = workbook.add_format(COLOR_CELL_PROPERTIES)
@@ -64,35 +64,35 @@ class Generator:
             ]
 
             print("Generating schedules to {}...".format(RESULT_XLSX))
-            self.generate_schedule_recursive(0)
+            self._generate_schedule_recursive(0)
             print("Done generating schedules to {}...".format(RESULT_XLSX))
 
-    def generate_schedule_recursive(self, course_idx):
+    def _generate_schedule_recursive(self, course_idx):
         if course_idx >= len(self.courses_tuple):
-            self.xlsx_write_schedule()
+            self._xlsx_write_schedule()
             print("\t-> Successfully generated a schedule")
         else:
             course: Course = self.courses_tuple[course_idx]
-            for group_tuple in course.groups_list:
-                if not self.is_free(group_tuple):
+            for classrooms_tuple in course.all_classrooms:
+                if not self._is_free(classrooms_tuple):
                     continue
-                self.set_periods(course_idx, group_tuple)
-                self.generate_schedule_recursive(course_idx + 1)
-                self.free_periods(group_tuple)
+                self._schedule_assign_classroom(course_idx, classrooms_tuple)
+                self._generate_schedule_recursive(course_idx + 1)
+                self._schedule_remove_classroom(classrooms_tuple)
 
-    def is_free(self, group_tuple) -> bool:
-        for classroom in group_tuple:
+    def _is_free(self, classrooms_tuple) -> bool:
+        for classroom in classrooms_tuple:
             for i in range(classroom.no_periods):
                 if (
-                    self.week_list[classroom.start_period + i - 1][classroom.week_date]
+                    self.schedule_table[classroom.start_period + i - 1][classroom.week_date]
                     is not None
                 ):
                     return False
         return True
 
-    def set_periods(self, course_idx, group_tuple):
-        for classroom in group_tuple:
-            self.week_list[classroom.start_period - 1][
+    def _schedule_assign_classroom(self, course_idx, classrooms_tuple):
+        for classroom in classrooms_tuple:
+            self.schedule_table[classroom.start_period - 1][
                 classroom.week_date
             ] = self.courses_tuple[course_idx].name
             for i in range(classroom.no_periods - 1):
@@ -100,43 +100,43 @@ class Generator:
                     classroom.week_date
                 ] = self.color_cell_formats_list[course_idx]
 
-            self.week_list[classroom.start_period + classroom.no_periods - 2][
+            self.schedule_table[classroom.start_period + classroom.no_periods - 2][
                 classroom.week_date
             ] = "{} - {}".format(classroom.professor, classroom.name)
             self.cells_format_list[classroom.start_period + classroom.no_periods - 2][
                 classroom.week_date
             ] = self.color_cell_formats_list[course_idx]
 
-    def free_periods(self, group_tuple):
-        for classroom in group_tuple:
+    def _schedule_remove_classroom(self, classrooms_tuple):
+        for classroom in classrooms_tuple:
             for i in range(classroom.no_periods):
-                self.week_list[classroom.start_period + i - 1][
+                self.schedule_table[classroom.start_period + i - 1][
                     classroom.week_date
                 ] = None
                 self.cells_format_list[classroom.start_period + i - 1][
                     classroom.week_date
                 ] = self.default_cell_format
 
-    def xlsx_write_schedule(self):
-        self.worksheet.set_row(self.rows_written, 30)
+    def _xlsx_write_schedule(self):
+        self.worksheet.set_row(self.rows_pointer, 30)
         self.worksheet.write_row(
-            self.rows_written, 1, list(WEEK_DAYS_DICT.keys()), self.header_format
+            self.rows_pointer, 1, list(WEEK_DAYS_DICT.keys()), self.header_format
         )
-        self.rows_written += 1
+        self.rows_pointer += 1
 
-        for period in enumerate(self.week_list):
+        for period in enumerate(self.schedule_table):
             self.worksheet.write(
-                self.rows_written, 0, period[0] + 1, self.default_cell_format
+                self.rows_pointer, 0, period[0] + 1, self.default_cell_format
             )
-            for week_date in enumerate(self.week_list[period[0]]):
+            for week_date in enumerate(self.schedule_table[period[0]]):
                 self.worksheet.write(
-                    self.rows_written,
+                    self.rows_pointer,
                     week_date[0] + 1,
-                    self.week_list[period[0]][week_date[0]],
+                    self.schedule_table[period[0]][week_date[0]],
                     self.cells_format_list[period[0]][week_date[0]],
                 )
-                self.worksheet.set_row(self.rows_written, 30)
-            self.rows_written += 1
+                self.worksheet.set_row(self.rows_pointer, 30)
+            self.rows_pointer += 1
 
-        self.worksheet.set_row(self.rows_written, 50, self.break_format)
-        self.rows_written += 1
+        self.worksheet.set_row(self.rows_pointer, 50, self.break_format)
+        self.rows_pointer += 1
