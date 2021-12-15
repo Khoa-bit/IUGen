@@ -30,7 +30,7 @@ class Generator:
         self.schedule_table = [
             [None for _ in range(self.WEEK_DAYS)] for _ in range(PERIODS_PER_DAY)
         ]
-        self.cells_format_list = [
+        self.schedule_table_format = [
             [DEFAULT_CELL_PROPERTIES for _ in range(self.WEEK_DAYS)]
             for _ in range(PERIODS_PER_DAY)
         ]
@@ -58,7 +58,7 @@ class Generator:
             self.header_format = workbook.add_format(HEADER_PROPERTIES)
             self.break_format = workbook.add_format(BREAK_PROPERTIES)
 
-            self.cells_format_list = [
+            self.schedule_table_format = [
                 [self.default_cell_format for _ in range(self.WEEK_DAYS)]
                 for _ in range(PERIODS_PER_DAY)
             ]
@@ -96,14 +96,14 @@ class Generator:
                 classroom.week_date
             ] = self.courses_tuple[course_idx].name
             for i in range(classroom.no_periods - 1):
-                self.cells_format_list[classroom.start_period + i - 1][
+                self.schedule_table_format[classroom.start_period + i - 1][
                     classroom.week_date
                 ] = self.color_cell_formats_list[course_idx]
 
             self.schedule_table[classroom.start_period + classroom.no_periods - 2][
                 classroom.week_date
             ] = "{} - {}".format(classroom.professor, classroom.name)
-            self.cells_format_list[classroom.start_period + classroom.no_periods - 2][
+            self.schedule_table_format[classroom.start_period + classroom.no_periods - 2][
                 classroom.week_date
             ] = self.color_cell_formats_list[course_idx]
 
@@ -113,7 +113,7 @@ class Generator:
                 self.schedule_table[classroom.start_period + i - 1][
                     classroom.week_date
                 ] = None
-                self.cells_format_list[classroom.start_period + i - 1][
+                self.schedule_table_format[classroom.start_period + i - 1][
                     classroom.week_date
                 ] = self.default_cell_format
 
@@ -133,7 +133,7 @@ class Generator:
                     self.rows_pointer,
                     week_date[0] + 1,
                     self.schedule_table[period[0]][week_date[0]],
-                    self.cells_format_list[period[0]][week_date[0]],
+                    self.schedule_table_format[period[0]][week_date[0]],
                 )
                 self.worksheet.set_row(self.rows_pointer, 30)
             self.rows_pointer += 1
