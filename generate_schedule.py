@@ -2,6 +2,7 @@ import xlsxwriter
 
 from models import Course
 from settings import (
+    INPUT_ODS,
     BREAK_PROPERTIES,
     COLOR_CELL_PROPERTIES,
     COLOR_PALETTE,
@@ -17,9 +18,8 @@ from utils import read_ods_catalog
 class Generator:
     WEEK_DAYS = 7
 
-    def __init__(self):
-        self.courses_dict = {}
-
+    def __init__(self, ods_file=INPUT_ODS):
+        self.courses_dict = read_ods_catalog(ods_file)
         self.default_cell_format = None
         self.color_cell_formats_list = None
         self.header_format = None
@@ -38,7 +38,6 @@ class Generator:
         self.courses_tuple = ()
 
     def run(self):
-        read_ods_catalog(self.courses_dict)
         self.courses_tuple = tuple(self.courses_dict.values())
 
         with xlsxwriter.Workbook(RESULT_XLSX) as workbook:
