@@ -4,7 +4,7 @@
 
 ---
 
-IUGen is a modern, user-friendly website for generating schedules that assists with the IU semester registration.
+IUGen is a modern, user-friendly script for generating schedules that assists with the IU semester registration.
 
 ---
 ## Installation
