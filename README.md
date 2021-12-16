@@ -1,4 +1,4 @@
-<p style="text-align: center">
+<p align="center">
     <img src="assets/Banner@1x.png" alt="IUGen Banner and Logo">
 </p>
 
